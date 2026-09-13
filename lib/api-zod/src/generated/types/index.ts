@@ -19,6 +19,7 @@ export * from './documentStatus';
 export * from './documentUpdate';
 export * from './documentUpdateStatus';
 export * from './extractedFields';
+export * from './extractedFieldsInput';
 export * from './healthStatus';
 export * from './itrDraft';
 export * from './itrDraftForm';

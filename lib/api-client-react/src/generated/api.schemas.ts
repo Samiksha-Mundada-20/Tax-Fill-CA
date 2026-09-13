@@ -61,12 +61,24 @@ export const DocumentInputDocumentType = {
   investment_proof: 'investment_proof',
 } as const;
 
+export interface ExtractedFieldsInput {
+  employer?: string;
+  /** @minimum 0 */
+  grossSalary?: number;
+  /** @minimum 0 */
+  tdsDeducted?: number;
+  pan?: string;
+  assessmentYear?: string;
+  confidenceNote?: string;
+}
+
 export interface DocumentInput {
   /** @minLength 1 */
   fileName: string;
   documentType: DocumentInputDocumentType;
   /** @minimum 1 */
   pageCount?: number;
+  extracted?: ExtractedFieldsInput;
 }
 
 export type DocumentUpdateStatus = typeof DocumentUpdateStatus[keyof typeof DocumentUpdateStatus];

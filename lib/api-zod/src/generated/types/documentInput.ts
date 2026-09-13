@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentInputDocumentType } from './documentInputDocumentType';
+import type { ExtractedFieldsInput } from './extractedFieldsInput';
 
 export interface DocumentInput {
   /** @minLength 1 */
@@ -13,4 +14,5 @@ export interface DocumentInput {
   documentType: DocumentInputDocumentType;
   /** @minimum 1 */
   pageCount?: number;
+  extracted?: ExtractedFieldsInput;
 }

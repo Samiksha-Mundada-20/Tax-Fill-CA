@@ -27,13 +27,13 @@ import { calculateTax } from "../lib/tax";
 
 const router: IRouter = Router();
 
-const seedExtracted = {
-  employer: "Aster Labs Private Limited",
-  grossSalary: 1_840_000,
-  tdsDeducted: 184_000,
-  pan: "ABCDE1234F",
+const emptyExtracted = {
+  employer: "",
+  grossSalary: 0,
+  tdsDeducted: 0,
+  pan: "",
   assessmentYear: "2026-27",
-  confidenceNote: "Salary and TDS fields matched across Form 16 Part A and Part B.",
+  confidenceNote: "Add extracted values after reviewing the uploaded document.",
 };
 
 function formatDocument(document: typeof documentsTable.$inferSelect) {
@@ -54,26 +54,31 @@ async function getDocuments() {
 function summaryFromDocuments(documents: Awaited<ReturnType<typeof getDocuments>>) {
   const form16 = documents.find((document) => document.documentType === "form16");
   return calculateTax({
-    grossSalary: form16?.extracted.grossSalary ?? 1_840_000,
+    grossSalary: form16?.extracted.grossSalary ?? 0,
     otherIncome: 0,
-    deductions80c: 120_000,
-    deductions80d: 18_000,
+    deductions80c: 0,
+    deductions80d: 0,
     deductions80g: 0,
     homeLoanInterest: 0,
-    hraReceived: 360_000,
-    rentPaid: 420_000,
-    basicSalary: 920_000,
-    isMetro: true,
-    age: 31,
+    hraReceived: 0,
+    rentPaid: 0,
+    basicSalary: 0,
+    isMetro: false,
+    age: 0,
   });
 }
 
 router.get("/dashboard", async (_req, res): Promise<void> => {
   const documents = await getDocuments();
+  const form16 = documents.find((document) => document.documentType === "form16");
   const summary = summaryFromDocuments(documents);
   const data = {
-    user: { name: "Ananya Sharma", panMasked: "ABCDE••••F", filingType: "Salaried · ITR-1" },
-    assessmentYear: "2026-27",
+    user: {
+      name: "Your workspace",
+      panMasked: "Not added",
+      filingType: form16 ? "Review required · ITR-1" : "Not set",
+    },
+    assessmentYear: form16?.extracted.assessmentYear || "2026-27",
     documents,
     tax: summary,
     checklist: [
@@ -102,8 +107,14 @@ router.post("/documents", async (req, res): Promise<void> => {
       fileName: parsed.data.fileName,
       documentType: parsed.data.documentType,
       status: "review",
-      confidence: 0.94,
-      extracted: seedExtracted,
+      confidence: parsed.data.extracted ? 0.94 : 0,
+      extracted: {
+        ...emptyExtracted,
+        ...parsed.data.extracted,
+        confidenceNote:
+          parsed.data.extracted?.confidenceNote ??
+          "Document added. Review and enter the extracted values before calculating tax.",
+      },
     })
     .returning();
   res.status(201).json(CreateDocumentResponse.parse(formatDocument(document)));
@@ -120,7 +131,7 @@ router.patch("/documents/:documentId", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const updateData: { status?: string; extracted?: typeof seedExtracted } = {};
+  const updateData: { status?: string; extracted?: typeof emptyExtracted } = {};
   if (parsed.data.status !== undefined) {
     updateData.status = parsed.data.status;
   }

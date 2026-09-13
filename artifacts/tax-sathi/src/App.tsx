@@ -73,23 +73,23 @@ const dateLabel = (value?: string) =>
     : 'Not yet';
 const titleCase = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const fallbackDashboard: Dashboard = {
-  user: { name: 'Aarav Mehta', panMasked: 'ABCDE••••F', filingType: 'Individual · Salaried' },
-  assessmentYear: '2025–26',
+const emptyDashboard: Dashboard = {
+  user: { name: 'Your workspace', panMasked: 'Not added', filingType: 'Not set' },
+  assessmentYear: '2026-27',
   documents: [],
   tax: {
-    grossIncome: 1248000,
+    grossIncome: 0,
     recommendedRegime: 'new',
-    savings: 18400,
+    savings: 0,
     calculatedAt: new Date().toISOString(),
-    newRegime: { taxableIncome: 1173000, baseTax: 90000, cess: 3600, totalTax: 93600, effectiveRate: 7.5, deductions: 75000, rebateApplied: false },
-    oldRegime: { taxableIncome: 1018000, baseTax: 103600, cess: 4144, totalTax: 107744, effectiveRate: 8.6, deductions: 230000, rebateApplied: false },
+    newRegime: { taxableIncome: 0, baseTax: 0, cess: 0, totalTax: 0, effectiveRate: 0, deductions: 0, rebateApplied: true },
+    oldRegime: { taxableIncome: 0, baseTax: 0, cess: 0, totalTax: 0, effectiveRate: 0, deductions: 0, rebateApplied: true },
   },
   checklist: [
-    { id: '1', label: 'Add your Form 16', state: 'current' },
-    { id: '2', label: 'Review tax calculation', state: 'upcoming' },
-    { id: '3', label: 'Check your ITR-1 draft', state: 'upcoming' },
-    { id: '4', label: 'Upload on the income-tax portal', state: 'upcoming' },
+    { id: 'documents', label: 'Add your documents', state: 'current' },
+    { id: 'tax', label: 'Review tax calculation', state: 'upcoming' },
+    { id: 'itr', label: 'Check your ITR-1 draft', state: 'upcoming' },
+    { id: 'file', label: 'Upload on the income-tax portal', state: 'upcoming' },
   ],
 };
 
@@ -127,7 +127,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
-function Shell({ children, eyebrow, title, description }: { children: ReactNode; eyebrow: string; title: string; description?: string }) {
+function Shell({ children, eyebrow, title, description, assessmentYear }: { children: ReactNode; eyebrow: string; title: string; description?: string; assessmentYear?: string }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navItems = [
@@ -160,7 +160,6 @@ function Shell({ children, eyebrow, title, description }: { children: ReactNode;
                 <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={`group flex items-center gap-3 rounded-lg px-4 py-3 text-[13px] font-medium transition-colors ${active ? 'bg-sidebar-accent text-sidebar-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}>
                   <Icon size={17} strokeWidth={active ? 2.2 : 1.8} />
                   <span>{item.label}</span>
-                  {item.href === '/documents' && <span className="ml-auto rounded-full bg-sidebar-primary/15 px-2 py-0.5 font-mono-ui text-[10px] text-sidebar-primary">4</span>}
                 </Link>
               );
             })}
@@ -187,8 +186,8 @@ function Shell({ children, eyebrow, title, description }: { children: ReactNode;
           <div className="ml-auto flex items-center gap-3">
             <Link href="/guide" className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:border-primary/40 hover:text-foreground sm:flex" data-testid="link-header-guide"><CircleHelp size={15} /> Need a hand?</Link>
             <div className="flex items-center gap-2 border-l border-border pl-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">AM</span>
-              <div className="hidden text-left sm:block"><p className="text-xs font-semibold">Aarav Mehta</p><p className="font-mono-ui text-[9px] text-muted-foreground">AY 2025–26</p></div>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">TS</span>
+              <div className="hidden text-left sm:block"><p className="text-xs font-semibold">Workspace</p><p className="font-mono-ui text-[9px] text-muted-foreground">{assessmentYear ? `AY ${assessmentYear}` : 'Tax filing'}</p></div>
               <ChevronDown size={14} className="text-muted-foreground" />
             </div>
           </div>
@@ -205,9 +204,9 @@ function Shell({ children, eyebrow, title, description }: { children: ReactNode;
 }
 
 function useWorkspace() {
-  const dashboardQuery = useGetDashboard();
+  const dashboardQuery = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey(), refetchInterval: 5000, refetchOnWindowFocus: true } });
   const healthQuery = useHealthCheck();
-  const dashboard = dashboardQuery.data ?? fallbackDashboard;
+  const dashboard = dashboardQuery.data ?? emptyDashboard;
   return { dashboard, dashboardQuery, healthQuery };
 }
 
@@ -225,7 +224,7 @@ function OverviewPage() {
   const completed = dashboard.checklist.filter((item) => item.state === 'complete').length;
   const current = dashboard.checklist.find((item) => item.state === 'current');
   return (
-    <Shell eyebrow={`Assessment year ${dashboard.assessmentYear}`} title="Good morning, Aarav." description="A clear path from documents to a filed return.">
+    <Shell eyebrow={`Assessment year ${dashboard.assessmentYear}`} title="Your filing workspace." assessmentYear={dashboard.assessmentYear} description="A clear path from documents to a filed return.">
       {dashboardQuery.isLoading ? <LoadingBlock /> : dashboardQuery.isError ? <QueryError onRetry={() => dashboardQuery.refetch()} /> : <div className="space-y-8">
         <section className="animate-rise-in grid gap-5 xl:grid-cols-[1.35fr_.65fr]">
           <div className="relative overflow-hidden rounded-2xl bg-primary p-7 text-primary-foreground sm:p-9">
@@ -263,21 +262,50 @@ function OverviewPage() {
 
 function DocumentsPage() {
   const { dashboard } = useWorkspace();
-  const docsQuery = useListDocuments();
+  const docsQuery = useListDocuments({ query: { queryKey: getListDocumentsQueryKey(), refetchInterval: 5000, refetchOnWindowFocus: true } });
   const create = useCreateDocument();
   const update = useUpdateDocument();
   const remove = useDeleteDocument();
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<string>(DocumentDocumentType.form16);
+  const [employer, setEmployer] = useState('');
+  const [grossSalary, setGrossSalary] = useState('');
+  const [tdsDeducted, setTdsDeducted] = useState('');
+  const [pan, setPan] = useState('');
   const [filter, setFilter] = useState('all');
   const docs = docsQuery.data ?? dashboard.documents ?? [];
   const filtered = filter === 'all' ? docs : docs.filter((doc) => doc.status === filter);
   const addDocument = () => {
     if (!fileName.trim()) return;
-    create.mutate({ data: { fileName: fileName.trim(), documentType: documentType as typeof DocumentDocumentType[keyof typeof DocumentDocumentType], pageCount: 1 } }, {
-      onSuccess: () => { setFileName(''); setShowAdd(false); queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() }); queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() }); },
+    const hasExtractedData = Boolean(employer.trim() || grossSalary || tdsDeducted || pan.trim());
+    create.mutate({ data: {
+      fileName: fileName.trim(),
+      documentType: documentType as typeof DocumentDocumentType[keyof typeof DocumentDocumentType],
+      pageCount: 1,
+      ...(hasExtractedData ? {
+        extracted: {
+          employer: employer.trim(),
+          grossSalary: Number(grossSalary) || 0,
+          tdsDeducted: Number(tdsDeducted) || 0,
+          pan: pan.trim().toUpperCase(),
+          assessmentYear: '2026-27',
+        },
+      } : {}),
+    } }, {
+      onSuccess: () => {
+        setFileName('');
+        setSelectedFile(null);
+        setEmployer('');
+        setGrossSalary('');
+        setTdsDeducted('');
+        setPan('');
+        setShowAdd(false);
+        queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+      },
     });
   };
   const changeStatus = (doc: Document) => update.mutate({ documentId: doc.id, data: { status: doc.status === 'verified' ? DocumentUpdateStatus.review : DocumentUpdateStatus.verified } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() }) });
@@ -286,7 +314,7 @@ function DocumentsPage() {
     <Shell eyebrow="Your filing / documents" title="Document review" description="Bring your tax papers together. We’ll show you what was read and what deserves a second look.">
       <div className="space-y-7">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="hidden max-w-xl text-sm leading-6 text-muted-foreground md:block">Bring your tax papers together. We’ll show you what was read and what deserves a second look.</p></div><button onClick={() => setShowAdd((value) => !value)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-xs font-bold text-primary-foreground hover:bg-primary/90" data-testid="button-add-document"><Plus size={16} /> Add a document</button></div>
-        {showAdd && <div className="animate-rise-in rounded-2xl border border-accent/45 bg-accent/10 p-5 sm:p-6"><div className="flex items-start justify-between"><div><p className="font-semibold">Add to your workspace</p><p className="mt-1 text-xs text-muted-foreground">For now, add the document name and type. You can review extracted fields once it is processed.</p></div><button onClick={() => setShowAdd(false)} aria-label="Close add document" data-testid="button-close-add-document"><X size={18} /></button></div><div className="mt-5 grid gap-4 md:grid-cols-[1fr_200px_auto]"><label className="block"><span className="mb-2 block font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">File name</span><input value={fileName} onChange={(event) => setFileName(event.target.value)} placeholder="e.g. Form16_Aarav_2024.pdf" className="h-11 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none ring-accent focus:ring-2" data-testid="input-document-file-name" /></label><label className="block"><span className="mb-2 block font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">Document type</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="h-11 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none" data-testid="select-document-type">{Object.values(DocumentDocumentType).map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}</select></label><button disabled={create.isPending || !fileName.trim()} onClick={addDocument} className="mt-auto h-11 rounded-lg bg-primary px-5 text-xs font-bold text-primary-foreground disabled:opacity-50" data-testid="button-save-document">{create.isPending ? 'Adding…' : 'Add document'}</button></div></div>}
+         {showAdd && <div className="animate-rise-in rounded-2xl border border-accent/45 bg-accent/10 p-5 sm:p-6"><div className="flex items-start justify-between"><div><p className="font-semibold">Add a real document</p><p className="mt-1 text-xs text-muted-foreground">Choose a file and enter any figures you have already reviewed. Blank fields stay blank until extraction is connected.</p></div><button onClick={() => setShowAdd(false)} aria-label="Close add document" data-testid="button-close-add-document"><X size={18} /></button></div><div className="mt-5 grid gap-4 md:grid-cols-2"><label className="block"><span className="mb-2 block font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">Tax document</span><input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setSelectedFile(file); if (file) setFileName(file.name); }} className="block h-11 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs" data-testid="input-document-file" /><input value={fileName} onChange={(event) => setFileName(event.target.value)} placeholder="Or enter a file name" className="mt-2 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none ring-accent focus:ring-2" data-testid="input-document-file-name" />{selectedFile && <p className="mt-1 text-[11px] text-muted-foreground">{Math.ceil(selectedFile.size / 1024)} KB selected</p>}</label><label className="block"><span className="mb-2 block font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">Document type</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="h-11 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none" data-testid="select-document-type">{Object.values(DocumentDocumentType).map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}</select><p className="mt-2 text-[11px] text-muted-foreground">The file is recorded in your workspace. Its contents are not sent anywhere until an OCR provider is connected.</p></label></div><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">Employer</span><input value={employer} onChange={(event) => setEmployer(event.target.value)} placeholder="Optional" className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-employer" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">Gross salary</span><input type="number" value={grossSalary} onChange={(event) => setGrossSalary(event.target.value)} placeholder="₹0" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-gross-salary" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">TDS deducted</span><input type="number" value={tdsDeducted} onChange={(event) => setTdsDeducted(event.target.value)} placeholder="₹0" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-tds" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">PAN</span><input value={pan} onChange={(event) => setPan(event.target.value.toUpperCase())} maxLength={10} placeholder="Optional" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm uppercase outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-pan" /></label></div><div className="mt-5 flex justify-end"><button disabled={create.isPending || !fileName.trim()} onClick={addDocument} className="h-11 rounded-lg bg-primary px-5 text-xs font-bold text-primary-foreground disabled:opacity-50" data-testid="button-save-document">{create.isPending ? 'Adding…' : 'Add document'}</button></div></div>}
         <div className="grid gap-4 sm:grid-cols-3"><StatTile label="In workspace" value={String(docs.length)} icon={<FileText size={17} />} /><StatTile label="Need review" value={String(docs.filter((doc) => doc.status === 'review').length)} icon={<PencilLine size={17} />} tone="amber" /><StatTile label="Verified" value={String(docs.filter((doc) => doc.status === 'verified').length)} icon={<BadgeCheck size={17} />} tone="green" /></div>
         <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">{['all', 'review', 'verified', 'processing'].map((item) => <button key={item} onClick={() => setFilter(item)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${filter === item ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`} data-testid={`button-filter-${item}`}>{item === 'all' ? 'All documents' : titleCase(item)}</button>)}</div>
         {docsQuery.isLoading ? <LoadingBlock label="Loading your documents" /> : docsQuery.isError ? <QueryError onRetry={() => docsQuery.refetch()} /> : filtered.length === 0 ? <EmptyDocuments onAdd={() => setShowAdd(true)} /> : <div className="overflow-hidden rounded-2xl border border-border bg-card"><div className="hidden grid-cols-[1.5fr_1fr_.8fr_.7fr_44px] gap-4 border-b border-border bg-muted/45 px-5 py-3 font-mono-ui text-[9px] uppercase tracking-[.13em] text-muted-foreground md:grid"><span>Document</span><span>Extracted employer</span><span>Confidence</span><span>Status</span><span /></div>{filtered.map((doc) => <DocumentRow key={doc.id} doc={doc} onStatus={() => changeStatus(doc)} onDelete={() => deleteDocument(doc)} pending={update.isPending || remove.isPending} />)}</div>}
@@ -313,7 +341,7 @@ function DocumentRow({ doc, onStatus, onDelete, pending }: { doc: Document; onSt
 function TaxPage() {
   const { dashboard } = useWorkspace();
   const calculate = useCalculateTax();
-  const [form, setForm] = useState({ grossSalary: String(dashboard.tax.grossIncome), otherIncome: '0', deductions80c: '150000', deductions80d: '25000', deductions80g: '0', homeLoanInterest: '0', hraReceived: '0', rentPaid: '0', basicSalary: '600000', age: '31', isMetro: true });
+   const [form, setForm] = useState({ grossSalary: String(dashboard.tax.grossIncome || ''), otherIncome: '', deductions80c: '', deductions80d: '', deductions80g: '', homeLoanInterest: '', hraReceived: '', rentPaid: '', basicSalary: '', age: '', isMetro: false });
   const [result, setResult] = useState<TaxSummary | null>(null);
   const tax = result ?? dashboard.tax;
   const setField = (name: string, value: string | boolean) => setForm((current) => ({ ...current, [name]: value }));
@@ -332,17 +360,17 @@ function RegimeCard({ label, regime, recommended }: { label: string; regime: Tax
 
 function ItrPage() {
   const { dashboard } = useWorkspace();
-  const filingsQuery = useListItrFilings();
+   const filingsQuery = useListItrFilings({ query: { queryKey: getListItrFilingsQueryKey(), refetchInterval: 5000, refetchOnWindowFocus: true } });
   const generate = useGenerateItrDraft();
   const [selected, setSelected] = useState<ItrDraft | null>(null);
-  const [name, setName] = useState(dashboard.user.name);
-  const [pan, setPan] = useState('ABCDE1234F');
+   const [name, setName] = useState('');
+   const [pan, setPan] = useState('');
   const [regime, setRegime] = useState<'new' | 'old'>(dashboard.tax.recommendedRegime);
   const queryClient = useQueryClient();
   const filings = filingsQuery.data ?? [];
   const current = selected ?? filings[0];
   const form16 = dashboard.documents.find((doc) => doc.documentType === 'form16');
-  const generateDraft = () => generate.mutate({ data: { pan: pan.toUpperCase(), name, grossSalary: form16?.extracted.grossSalary ?? dashboard.tax.grossIncome, tdsDeducted: form16?.extracted.tdsDeducted ?? dashboard.tax.newRegime.totalTax, regime } }, { onSuccess: (draft) => { setSelected(draft); queryClient.invalidateQueries({ queryKey: getListItrFilingsQueryKey() }); } });
+   const generateDraft = () => generate.mutate({ data: { pan: pan.toUpperCase(), name, grossSalary: form16?.extracted.grossSalary ?? dashboard.tax.grossIncome, tdsDeducted: form16?.extracted.tdsDeducted ?? 0, regime } }, { onSuccess: (draft) => { setSelected(draft); queryClient.invalidateQueries({ queryKey: getListItrFilingsQueryKey() }); } });
   return <Shell eyebrow="Your filing / ITR-1" title="Review your ITR-1" description="A draft is a review tool, not a submission. Read the warnings before you take it to the portal."><div className="space-y-7">
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="hidden max-w-xl text-sm leading-6 text-muted-foreground md:block">A draft is a review tool, not a submission. Read the warnings before you take it to the portal.</p></div><button onClick={generateDraft} disabled={generate.isPending || !name || pan.length !== 10} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-xs font-bold text-primary-foreground disabled:opacity-50" data-testid="button-generate-itr">{generate.isPending ? <><Loader2 size={15} className="animate-spin" /> Generating…</> : <><FilePlus2 size={16} /> Generate fresh draft</>}</button></div>
     {generate.isError && <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-xs text-destructive">We could not generate this draft. Check the PAN and try again.</div>}
@@ -359,7 +387,7 @@ function GenerateItrEmpty({ name, setName, pan, setPan, regime, setRegime, onGen
 function MiniValue({ label, value }: { label: string; value: string }) { return <div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 truncate text-sm font-semibold">{value}</p></div>; }
 
 function GuidePage() {
-  const steps = [{ number: '01', title: 'Sign in to incometax.gov.in', body: 'Use the same PAN-linked account you normally use to access your income-tax return. Tax Sathi never asks for these credentials.' }, { number: '02', title: 'Choose File Income Tax Return', body: 'Open e-File → Income Tax Returns → File Income Tax Return. Select AY 2025–26 and your filing type.' }, { number: '03', title: 'Select ITR-1 and your regime', body: 'Choose ITR-1, then select the regime you reviewed in Tax Sathi. Work through the prefilled sections carefully.' }, { number: '04', title: 'Upload, validate, e-Verify', body: 'Upload your prepared JSON, validate the return, then e-Verify with an OTP or your bank account. Save the acknowledgement.' }];
+   const steps = [{ number: '01', title: 'Sign in to incometax.gov.in', body: 'Use the same PAN-linked account you normally use to access your income-tax return. Tax Sathi never asks for these credentials.' }, { number: '02', title: 'Choose File Income Tax Return', body: 'Open e-File → Income Tax Returns → File Income Tax Return. Select AY 2026–27 and your filing type.' }, { number: '03', title: 'Select ITR-1 and your regime', body: 'Choose ITR-1, then select the regime you reviewed in Tax Sathi. Work through the prefilled sections carefully.' }, { number: '04', title: 'Upload, validate, e-Verify', body: 'Upload your prepared JSON, validate the return, then e-Verify with an OTP or your bank account. Save the acknowledgement.' }];
   const [copied, setCopied] = useState(false);
   const copyUrl = () => { navigator.clipboard?.writeText('https://www.incometax.gov.in/iec/foportal'); setCopied(true); setTimeout(() => setCopied(false), 1600); };
   return <Shell eyebrow="Help & privacy / upload guide" title="The official upload, step by step." description="Tax Sathi prepares the review. You stay in control of the final upload and verification."><div className="space-y-8">
@@ -373,7 +401,7 @@ function SettingsPage() {
   const consentQuery = useGetConsent();
   const update = useUpdateConsent();
   const queryClient = useQueryClient();
-  const fallbackConsent: Consent = { ocrProcessing: true, dataStorage: true, taxCalculation: true, updatedAt: new Date().toISOString() };
+   const fallbackConsent: Consent = { ocrProcessing: false, dataStorage: false, taxCalculation: false, updatedAt: new Date().toISOString() };
   const consent = consentQuery.data ?? fallbackConsent;
   const [local, setLocal] = useState<Consent | null>(null);
   const values = local ?? consent;

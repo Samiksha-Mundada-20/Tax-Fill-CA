@@ -115,12 +115,24 @@ export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem)
 
 export const createDocumentBodyPageCountDefault = 1;
 
+export const createDocumentBodyExtractedGrossSalaryMin = 0;
+
+export const createDocumentBodyExtractedTdsDeductedMin = 0;
+
 
 
 export const CreateDocumentBody = zod.object({
   "fileName": zod.string().min(1),
   "documentType": zod.enum(['form16', 'form26as', 'ais', 'rent_receipt', 'investment_proof']),
-  "pageCount": zod.number().int().min(1).default(createDocumentBodyPageCountDefault)
+  "pageCount": zod.number().int().min(1).default(createDocumentBodyPageCountDefault),
+  "extracted": zod.object({
+  "employer": zod.string().optional(),
+  "grossSalary": zod.number().min(createDocumentBodyExtractedGrossSalaryMin).optional(),
+  "tdsDeducted": zod.number().min(createDocumentBodyExtractedTdsDeductedMin).optional(),
+  "pan": zod.string().optional(),
+  "assessmentYear": zod.string().optional(),
+  "confidenceNote": zod.string().optional()
+}).optional()
 })
 
 export const createDocumentResponseExtractedGrossSalaryMin = 0;

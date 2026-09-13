@@ -229,6 +229,8 @@ components:
           type: string
           enum: [form16, form26as, ais, rent_receipt, investment_proof]
         pageCount: { type: integer, minimum: 1, default: 1 }
+        extracted:
+          $ref: "#/components/schemas/ExtractedFieldsInput"
     DocumentUpdate:
       type: object
       properties:
@@ -240,6 +242,15 @@ components:
     ExtractedFields:
       type: object
       required: [employer, grossSalary, tdsDeducted, pan, assessmentYear]
+      properties:
+        employer: { type: string }
+        grossSalary: { type: number, minimum: 0 }
+        tdsDeducted: { type: number, minimum: 0 }
+        pan: { type: string }
+        assessmentYear: { type: string }
+        confidenceNote: { type: string }
+    ExtractedFieldsInput:
+      type: object
       properties:
         employer: { type: string }
         grossSalary: { type: number, minimum: 0 }
