@@ -3,13 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Tax Sathi API for India income-tax filing preparation
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+    description: Filing workspace overview
+  - name: documents
+    description: Uploaded tax documents and review status
+  - name: tax
+    description: Tax calculations and regime comparison
+  - name: itr
+    description: ITR draft generation
+  - name: compliance
+    description: User consent and privacy controls
 paths:
   /healthz:
     get:
@@ -24,6 +34,167 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get filing workspace summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List uploaded tax documents
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+    post:
+      operationId: createDocument
+      tags: [documents]
+      summary: Add a document for extraction review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentInput"
+      responses:
+        "201":
+          description: Created document with extracted fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+  /documents/{documentId}:
+    patch:
+      operationId: updateDocument
+      tags: [documents]
+      summary: Update reviewed document fields
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentUpdate"
+      responses:
+        "200":
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "404":
+          description: Document not found
+    delete:
+      operationId: deleteDocument
+      tags: [documents]
+      summary: Delete a document
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+  /tax/calculate:
+    post:
+      operationId: calculateTax
+      tags: [tax]
+      summary: Calculate tax under old and new regimes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaxCalculationInput"
+      responses:
+        "200":
+          description: Tax comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxSummary"
+  /itr/generate:
+    post:
+      operationId: generateItrDraft
+      tags: [itr]
+      summary: Generate an ITR-1 draft payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ItrDraftInput"
+      responses:
+        "201":
+          description: Generated draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItrDraft"
+  /itr/filings:
+    get:
+      operationId: listItrFilings
+      tags: [itr]
+      summary: List generated ITR drafts
+      responses:
+        "200":
+          description: ITR drafts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ItrDraft"
+  /compliance/consent:
+    get:
+      operationId: getConsent
+      tags: [compliance]
+      summary: Get consent preferences
+      responses:
+        "200":
+          description: Consent preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Consent"
+    post:
+      operationId: updateConsent
+      tags: [compliance]
+      summary: Update consent preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsentInput"
+      responses:
+        "200":
+          description: Updated consent preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Consent"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +204,163 @@ components:
           type: string
       required:
         - status
+    Document:
+      type: object
+      required: [id, fileName, documentType, status, uploadedAt, confidence, extracted]
+      properties:
+        id: { type: string }
+        fileName: { type: string }
+        documentType:
+          type: string
+          enum: [form16, form26as, ais, rent_receipt, investment_proof]
+        status:
+          type: string
+          enum: [processing, review, verified]
+        uploadedAt: { type: string }
+        confidence: { type: number }
+        extracted:
+          $ref: "#/components/schemas/ExtractedFields"
+    DocumentInput:
+      type: object
+      required: [fileName, documentType]
+      properties:
+        fileName: { type: string, minLength: 1 }
+        documentType:
+          type: string
+          enum: [form16, form26as, ais, rent_receipt, investment_proof]
+        pageCount: { type: integer, minimum: 1, default: 1 }
+    DocumentUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [processing, review, verified]
+        extracted:
+          $ref: "#/components/schemas/ExtractedFields"
+    ExtractedFields:
+      type: object
+      required: [employer, grossSalary, tdsDeducted, pan, assessmentYear]
+      properties:
+        employer: { type: string }
+        grossSalary: { type: number, minimum: 0 }
+        tdsDeducted: { type: number, minimum: 0 }
+        pan: { type: string }
+        assessmentYear: { type: string }
+        confidenceNote: { type: string }
+    Dashboard:
+      type: object
+      required: [user, assessmentYear, documents, tax, checklist]
+      properties:
+        user:
+          $ref: "#/components/schemas/UserSummary"
+        assessmentYear: { type: string }
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        tax:
+          $ref: "#/components/schemas/TaxSummary"
+        checklist:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistItem"
+    UserSummary:
+      type: object
+      required: [name, panMasked, filingType]
+      properties:
+        name: { type: string }
+        panMasked: { type: string }
+        filingType: { type: string }
+    ChecklistItem:
+      type: object
+      required: [id, label, state]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        state:
+          type: string
+          enum: [complete, current, upcoming]
+    TaxCalculationInput:
+      type: object
+      required: [grossSalary]
+      properties:
+        grossSalary: { type: number, minimum: 0 }
+        otherIncome: { type: number, minimum: 0, default: 0 }
+        deductions80c: { type: number, minimum: 0, default: 0 }
+        deductions80d: { type: number, minimum: 0, default: 0 }
+        deductions80g: { type: number, minimum: 0, default: 0 }
+        homeLoanInterest: { type: number, minimum: 0, default: 0 }
+        hraReceived: { type: number, minimum: 0, default: 0 }
+        rentPaid: { type: number, minimum: 0, default: 0 }
+        basicSalary: { type: number, minimum: 0, default: 0 }
+        isMetro: { type: boolean, default: false }
+        age: { type: integer, minimum: 0, default: 30 }
+    TaxSummary:
+      type: object
+      required: [grossIncome, newRegime, oldRegime, recommendedRegime, savings, calculatedAt]
+      properties:
+        grossIncome: { type: number }
+        newRegime:
+          $ref: "#/components/schemas/RegimeResult"
+        oldRegime:
+          $ref: "#/components/schemas/RegimeResult"
+        recommendedRegime:
+          type: string
+          enum: [new, old]
+        savings: { type: number }
+        calculatedAt: { type: string }
+    RegimeResult:
+      type: object
+      required: [taxableIncome, baseTax, cess, totalTax, effectiveRate]
+      properties:
+        taxableIncome: { type: number }
+        baseTax: { type: number }
+        cess: { type: number }
+        totalTax: { type: number }
+        effectiveRate: { type: number }
+        rebateApplied: { type: boolean }
+        deductions: { type: number }
+    ItrDraftInput:
+      type: object
+      required: [pan, name, grossSalary, tdsDeducted, regime]
+      properties:
+        pan: { type: string, pattern: "^[A-Z]{5}[0-9]{4}[A-Z]$" }
+        name: { type: string, minLength: 1 }
+        grossSalary: { type: number, minimum: 0 }
+        tdsDeducted: { type: number, minimum: 0 }
+        regime:
+          type: string
+          enum: [new, old]
+    ItrDraft:
+      type: object
+      required: [id, form, assessmentYear, status, generatedAt, warnings, payload]
+      properties:
+        id: { type: string }
+        form: { type: string, enum: [ITR-1] }
+        assessmentYear: { type: string }
+        status:
+          type: string
+          enum: [draft, needs_review, ready]
+        generatedAt: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+    Consent:
+      type: object
+      required: [ocrProcessing, dataStorage, taxCalculation, updatedAt]
+      properties:
+        ocrProcessing: { type: boolean }
+        dataStorage: { type: boolean }
+        taxCalculation: { type: boolean }
+        updatedAt: { type: string }
+    ConsentInput:
+      type: object
+      required: [ocrProcessing, dataStorage, taxCalculation]
+      properties:
+        ocrProcessing: { type: boolean }
+        dataStorage: { type: boolean }
+        taxCalculation: { type: boolean }
 

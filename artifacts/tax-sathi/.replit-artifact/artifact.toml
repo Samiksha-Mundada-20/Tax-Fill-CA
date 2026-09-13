@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Tax Sathi"
+description = "A guided India income-tax filing workspace for salaried taxpayers. Upload documents, review extracted figures, compare tax regimes, and prepare a validated ITR-1 draft for manual portal upload."
+version = "1.0.0"
+id = "artifacts/tax-sathi"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19032
+
+[services.development]
+run = "pnpm --filter @workspace/tax-sathi run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tax-sathi", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/tax-sathi/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19032"
+BASE_PATH = "/"
