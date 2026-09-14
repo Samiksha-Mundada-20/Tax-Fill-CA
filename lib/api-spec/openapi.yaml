@@ -229,6 +229,10 @@ components:
           type: string
           enum: [form16, form26as, ais, rent_receipt, investment_proof]
         pageCount: { type: integer, minimum: 1, default: 1 }
+        fileData:
+          type: string
+          description: Base64 data URL for OCR processing. Kept server-side and never returned.
+          maxLength: 25000000
         extracted:
           $ref: "#/components/schemas/ExtractedFieldsInput"
     DocumentUpdate:

@@ -78,6 +78,11 @@ export interface DocumentInput {
   documentType: DocumentInputDocumentType;
   /** @minimum 1 */
   pageCount?: number;
+  /**
+     * Base64 data URL for OCR processing. Kept server-side and never returned.
+     * @maxLength 25000000
+     */
+  fileData?: string;
   extracted?: ExtractedFieldsInput;
 }
 

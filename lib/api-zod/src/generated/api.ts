@@ -115,6 +115,8 @@ export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem)
 
 export const createDocumentBodyPageCountDefault = 1;
 
+export const createDocumentBodyFileDataMax = 25000000;
+
 export const createDocumentBodyExtractedGrossSalaryMin = 0;
 
 export const createDocumentBodyExtractedTdsDeductedMin = 0;
@@ -125,6 +127,7 @@ export const CreateDocumentBody = zod.object({
   "fileName": zod.string().min(1),
   "documentType": zod.enum(['form16', 'form26as', 'ais', 'rent_receipt', 'investment_proof']),
   "pageCount": zod.number().int().min(1).default(createDocumentBodyPageCountDefault),
+  "fileData": zod.string().max(createDocumentBodyFileDataMax).optional().describe('Base64 data URL for OCR processing. Kept server-side and never returned.'),
   "extracted": zod.object({
   "employer": zod.string().optional(),
   "grossSalary": zod.number().min(createDocumentBodyExtractedGrossSalaryMin).optional(),

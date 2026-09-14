@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import {
   CalculateTaxBody,
   CalculateTaxResponse,
@@ -22,10 +22,60 @@ import {
   db,
   documentsTable,
   itrFilingsTable,
+  clientsTable,
+  tasksTable,
 } from "@workspace/db";
 import { calculateTax } from "../lib/tax";
+import { extractWithMistral } from "../lib/mistral-ocr";
 
 const router: IRouter = Router();
+
+type ParseResult<T> = { success: true; data: T } | { success: false; error: { message: string } };
+type ClientInput = { name: string; panMasked?: string; email?: string; service: string; nextDeadline?: string };
+type TaskInput = { clientId?: string; title: string; category: string; dueDate: string; priority: "normal" | "high" | "urgent"; assignee: string };
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function parseClientInput(body: unknown): ParseResult<ClientInput> {
+  const input = body as Record<string, unknown> | null;
+  const name = stringValue(input?.name);
+  const service = stringValue(input?.service) || "ITR filing";
+  if (!name || !service) return { success: false, error: { message: "Client name and service are required." } };
+  return {
+    success: true,
+    data: {
+      name,
+      panMasked: stringValue(input?.panMasked) || undefined,
+      email: stringValue(input?.email) || undefined,
+      service,
+      nextDeadline: stringValue(input?.nextDeadline) || undefined,
+    },
+  };
+}
+
+function parseTaskInput(body: unknown): ParseResult<TaskInput> {
+  const input = body as Record<string, unknown> | null;
+  const title = stringValue(input?.title);
+  const dueDate = stringValue(input?.dueDate);
+  const priority = stringValue(input?.priority) as TaskInput["priority"];
+  if (!title || !dueDate) return { success: false, error: { message: "Task title and due date are required." } };
+  if (priority && !["normal", "high", "urgent"].includes(priority)) return { success: false, error: { message: "Invalid task priority." } };
+  const clientId = stringValue(input?.clientId);
+  if (clientId && !/^[0-9a-f-]{36}$/i.test(clientId)) return { success: false, error: { message: "Invalid client." } };
+  return {
+    success: true,
+    data: {
+      clientId: clientId || undefined,
+      title,
+      category: stringValue(input?.category) || "document_collection",
+      dueDate,
+      priority: priority || "normal",
+      assignee: stringValue(input?.assignee) || "Unassigned",
+    },
+  };
+}
 
 const emptyExtracted = {
   employer: "",
@@ -68,6 +118,77 @@ function summaryFromDocuments(documents: Awaited<ReturnType<typeof getDocuments>
   });
 }
 
+router.get("/practice/clients", async (_req, res): Promise<void> => {
+  res.json(await db.select().from(clientsTable).orderBy(desc(clientsTable.createdAt)));
+});
+
+router.post("/practice/clients", async (req, res): Promise<void> => {
+  const parsed = parseClientInput(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [client] = await db
+    .insert(clientsTable)
+    .values({
+      ...parsed.data,
+      panMasked: parsed.data.panMasked || "Not added",
+      email: parsed.data.email || "",
+      nextDeadline: parsed.data.nextDeadline || "",
+    })
+    .returning();
+  res.status(201).json(client);
+});
+
+router.get("/practice/tasks", async (_req, res): Promise<void> => {
+  const tasks = await db
+    .select({
+      id: tasksTable.id,
+      clientId: tasksTable.clientId,
+      clientName: clientsTable.name,
+      title: tasksTable.title,
+      category: tasksTable.category,
+      dueDate: tasksTable.dueDate,
+      priority: tasksTable.priority,
+      assignee: tasksTable.assignee,
+      status: tasksTable.status,
+      createdAt: tasksTable.createdAt,
+    })
+    .from(tasksTable)
+    .leftJoin(clientsTable, eq(tasksTable.clientId, clientsTable.id))
+    .orderBy(asc(tasksTable.dueDate), desc(tasksTable.createdAt));
+  res.json(tasks);
+});
+
+router.post("/practice/tasks", async (req, res): Promise<void> => {
+  const parsed = parseTaskInput(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [task] = await db.insert(tasksTable).values(parsed.data).returning();
+  res.status(201).json(task);
+});
+
+router.patch("/practice/tasks/:taskId", async (req, res): Promise<void> => {
+  const taskId = stringValue(req.params.taskId);
+  const status = stringValue((req.body as Record<string, unknown> | null)?.status);
+  if (!/^[0-9a-f-]{36}$/i.test(taskId) || !["open", "in_progress", "done"].includes(status)) {
+    res.status(400).json({ error: "Invalid task update." });
+    return;
+  }
+  const [task] = await db
+    .update(tasksTable)
+    .set({ status })
+    .where(eq(tasksTable.id, taskId))
+    .returning();
+  if (!task) {
+    res.status(404).json({ error: "Task not found." });
+    return;
+  }
+  res.json(task);
+});
+
 router.get("/dashboard", async (_req, res): Promise<void> => {
   const documents = await getDocuments();
   const form16 = documents.find((document) => document.documentType === "form16");
@@ -101,18 +222,48 @@ router.post("/documents", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  let extracted = {
+    ...emptyExtracted,
+    ...parsed.data.extracted,
+  };
+  let confidence = parsed.data.extracted ? 0.94 : 0;
+  if (parsed.data.fileData) {
+    try {
+      const ocr = await extractWithMistral({
+        dataUrl: parsed.data.fileData,
+        documentType: parsed.data.documentType,
+      });
+      extracted = {
+        employer: ocr.employer,
+        grossSalary: ocr.grossSalary,
+        tdsDeducted: ocr.tdsDeducted,
+        pan: ocr.pan,
+        assessmentYear: ocr.assessmentYear,
+        confidenceNote: ocr.confidenceNote,
+      };
+      if (parsed.data.extracted?.employer) extracted.employer = parsed.data.extracted.employer;
+      if (parsed.data.extracted?.grossSalary) extracted.grossSalary = parsed.data.extracted.grossSalary;
+      if (parsed.data.extracted?.tdsDeducted) extracted.tdsDeducted = parsed.data.extracted.tdsDeducted;
+      if (parsed.data.extracted?.pan) extracted.pan = parsed.data.extracted.pan;
+      confidence = [ocr.employer, ocr.grossSalary, ocr.tdsDeducted, ocr.pan].filter(Boolean).length / 4;
+    } catch (error) {
+      res.status(502).json({
+        error: error instanceof Error ? error.message : "OCR processing failed.",
+      });
+      return;
+    }
+  }
   const [document] = await db
     .insert(documentsTable)
     .values({
       fileName: parsed.data.fileName,
       documentType: parsed.data.documentType,
       status: "review",
-      confidence: parsed.data.extracted ? 0.94 : 0,
+      confidence,
       extracted: {
-        ...emptyExtracted,
-        ...parsed.data.extracted,
+        ...extracted,
         confidenceNote:
-          parsed.data.extracted?.confidenceNote ??
+          extracted.confidenceNote ||
           "Document added. Review and enter the extracted values before calculating tax.",
       },
     })

@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -72,6 +72,13 @@ const dateLabel = (value?: string) =>
     ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value))
     : 'Not yet';
 const titleCase = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const fileToDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Could not read the selected file.'));
+    reader.readAsDataURL(file);
+  });
 
 const emptyDashboard: Dashboard = {
   user: { name: 'Your workspace', panMasked: 'Not added', filingType: 'Not set' },
@@ -131,7 +138,7 @@ function Shell({ children, eyebrow, title, description, assessmentYear }: { chil
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navItems = [
-    { href: '/', label: 'Workspace', icon: ClipboardCheck },
+             { href: '/', label: 'Practice workspace', icon: ClipboardCheck },
     { href: '/documents', label: 'Documents', icon: FileText },
     { href: '/tax', label: 'Tax comparison', icon: Scale },
     { href: '/itr', label: 'ITR-1 draft', icon: FileCheck2 },
@@ -224,7 +231,7 @@ function OverviewPage() {
   const completed = dashboard.checklist.filter((item) => item.state === 'complete').length;
   const current = dashboard.checklist.find((item) => item.state === 'current');
   return (
-    <Shell eyebrow={`Assessment year ${dashboard.assessmentYear}`} title="Your filing workspace." assessmentYear={dashboard.assessmentYear} description="A clear path from documents to a filed return.">
+    <Shell eyebrow="CA practice operations" title="Keep every client filing on track." assessmentYear={dashboard.assessmentYear} description="Centralize clients, documents, deadlines, and review work in one practice workspace.">
       {dashboardQuery.isLoading ? <LoadingBlock /> : dashboardQuery.isError ? <QueryError onRetry={() => dashboardQuery.refetch()} /> : <div className="space-y-8">
         <section className="animate-rise-in grid gap-5 xl:grid-cols-[1.35fr_.65fr]">
           <div className="relative overflow-hidden rounded-2xl bg-primary p-7 text-primary-foreground sm:p-9">
@@ -232,9 +239,9 @@ function OverviewPage() {
             <div className="absolute -bottom-28 right-20 h-72 w-72 rounded-full border border-primary-foreground/10" />
             <div className="relative max-w-[620px]">
               <div className="flex items-center gap-2 text-accent"><span className="h-2 w-2 rounded-full bg-accent" /><span className="font-mono-ui text-[10px] uppercase tracking-[0.17em]">Next best action</span></div>
-              <h2 className="mt-5 max-w-lg font-display text-[37px] leading-[1.06] tracking-[-0.025em] sm:text-[46px]">Start with the documents that shape your return.</h2>
-              <p className="mt-5 max-w-md text-sm leading-6 text-primary-foreground/65">Add your Form 16 first. We’ll read the key numbers, flag anything worth checking, and keep the rest of your filing in one place.</p>
-              <Link href="/documents" className="mt-7 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-3 text-xs font-bold text-accent-foreground transition-transform hover:-translate-y-0.5" data-testid="link-next-action">Review documents <ArrowRight size={15} /></Link>
+               <h2 className="mt-5 max-w-lg font-display text-[37px] leading-[1.06] tracking-[-0.025em] sm:text-[46px]">Collect, review, and file without chasing status.</h2>
+               <p className="mt-5 max-w-md text-sm leading-6 text-primary-foreground/65">Add clients, assign compliance work, and let Mistral OCR turn uploaded tax documents into reviewable fields for your team.</p>
+               <Link href="/documents" className="mt-7 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-3 text-xs font-bold text-accent-foreground transition-transform hover:-translate-y-0.5" data-testid="link-next-action">Open document queue <ArrowRight size={15} /></Link>
             </div>
           </div>
           <div className="paper-shadow rounded-2xl border border-border bg-card p-7 sm:p-8">
@@ -254,7 +261,8 @@ function OverviewPage() {
             <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c5ddd1] text-[#276e62]"><LockKeyhole size={18} /></div><div><p className="font-semibold">Your filing, your call</p><p className="text-xs text-[#45645d]">Nothing is submitted without your review.</p></div></div>
             <div className="mt-7 grid gap-5 sm:grid-cols-3"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.14em] text-[#52736b]">Documents</p><p className="mt-2 text-2xl font-semibold">{documents.length}</p><p className="mt-1 text-[11px] text-[#52736b]">in workspace</p></div><div><p className="font-mono-ui text-[10px] uppercase tracking-[.14em] text-[#52736b]">Last calculated</p><p className="mt-2 text-sm font-semibold">{dateLabel(dashboard.tax.calculatedAt)}</p><p className="mt-1 text-[11px] text-[#52736b]">tax estimate</p></div><div><p className="font-mono-ui text-[10px] uppercase tracking-[.14em] text-[#52736b]">Status</p><p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#27766e]"><BadgeCheck size={16} /> Private</p><p className="mt-1 text-[11px] text-[#52736b]">secure workspace</p></div></div>
           </div>
-        </section>
+       </section>
+       <PracticeWorkflow />
       </div>}
     </Shell>
   );
@@ -263,6 +271,7 @@ function OverviewPage() {
 function DocumentsPage() {
   const { dashboard } = useWorkspace();
   const docsQuery = useListDocuments({ query: { queryKey: getListDocumentsQueryKey(), refetchInterval: 5000, refetchOnWindowFocus: true } });
+  const consentQuery = useGetConsent();
   const create = useCreateDocument();
   const update = useUpdateDocument();
   const remove = useDeleteDocument();
@@ -275,16 +284,30 @@ function DocumentsPage() {
   const [grossSalary, setGrossSalary] = useState('');
   const [tdsDeducted, setTdsDeducted] = useState('');
   const [pan, setPan] = useState('');
+  const [ocrError, setOcrError] = useState('');
   const [filter, setFilter] = useState('all');
   const docs = docsQuery.data ?? dashboard.documents ?? [];
   const filtered = filter === 'all' ? docs : docs.filter((doc) => doc.status === filter);
-  const addDocument = () => {
+  const addDocument = async () => {
     if (!fileName.trim()) return;
+    if (selectedFile && consentQuery.data && !consentQuery.data.ocrProcessing) {
+      setOcrError('Enable Document reading in Privacy settings before sending a file to OCR.');
+      return;
+    }
+    setOcrError('');
     const hasExtractedData = Boolean(employer.trim() || grossSalary || tdsDeducted || pan.trim());
+    let fileData: string | undefined;
+    try {
+      fileData = selectedFile ? await fileToDataUrl(selectedFile) : undefined;
+    } catch (error) {
+      setOcrError(error instanceof Error ? error.message : 'Could not read the selected file.');
+      return;
+    }
     create.mutate({ data: {
       fileName: fileName.trim(),
       documentType: documentType as typeof DocumentDocumentType[keyof typeof DocumentDocumentType],
       pageCount: 1,
+      ...(fileData ? { fileData } : {}),
       ...(hasExtractedData ? {
         extracted: {
           employer: employer.trim(),
@@ -302,9 +325,13 @@ function DocumentsPage() {
         setGrossSalary('');
         setTdsDeducted('');
         setPan('');
+        setOcrError('');
         setShowAdd(false);
         queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+      },
+      onError: (error) => {
+        setOcrError(error instanceof Error ? error.message : 'The document could not be processed.');
       },
     });
   };
@@ -314,12 +341,167 @@ function DocumentsPage() {
     <Shell eyebrow="Your filing / documents" title="Document review" description="Bring your tax papers together. We’ll show you what was read and what deserves a second look.">
       <div className="space-y-7">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="hidden max-w-xl text-sm leading-6 text-muted-foreground md:block">Bring your tax papers together. We’ll show you what was read and what deserves a second look.</p></div><button onClick={() => setShowAdd((value) => !value)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-xs font-bold text-primary-foreground hover:bg-primary/90" data-testid="button-add-document"><Plus size={16} /> Add a document</button></div>
-         {showAdd && <div className="animate-rise-in rounded-2xl border border-accent/45 bg-accent/10 p-5 sm:p-6"><div className="flex items-start justify-between"><div><p className="font-semibold">Add a real document</p><p className="mt-1 text-xs text-muted-foreground">Choose a file and enter any figures you have already reviewed. Blank fields stay blank until extraction is connected.</p></div><button onClick={() => setShowAdd(false)} aria-label="Close add document" data-testid="button-close-add-document"><X size={18} /></button></div><div className="mt-5 grid gap-4 md:grid-cols-2"><label className="block"><span className="mb-2 block font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">Tax document</span><input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setSelectedFile(file); if (file) setFileName(file.name); }} className="block h-11 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs" data-testid="input-document-file" /><input value={fileName} onChange={(event) => setFileName(event.target.value)} placeholder="Or enter a file name" className="mt-2 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none ring-accent focus:ring-2" data-testid="input-document-file-name" />{selectedFile && <p className="mt-1 text-[11px] text-muted-foreground">{Math.ceil(selectedFile.size / 1024)} KB selected</p>}</label><label className="block"><span className="mb-2 block font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">Document type</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="h-11 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none" data-testid="select-document-type">{Object.values(DocumentDocumentType).map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}</select><p className="mt-2 text-[11px] text-muted-foreground">The file is recorded in your workspace. Its contents are not sent anywhere until an OCR provider is connected.</p></label></div><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">Employer</span><input value={employer} onChange={(event) => setEmployer(event.target.value)} placeholder="Optional" className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-employer" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">Gross salary</span><input type="number" value={grossSalary} onChange={(event) => setGrossSalary(event.target.value)} placeholder="₹0" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-gross-salary" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">TDS deducted</span><input type="number" value={tdsDeducted} onChange={(event) => setTdsDeducted(event.target.value)} placeholder="₹0" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-tds" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">PAN</span><input value={pan} onChange={(event) => setPan(event.target.value.toUpperCase())} maxLength={10} placeholder="Optional" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm uppercase outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-pan" /></label></div><div className="mt-5 flex justify-end"><button disabled={create.isPending || !fileName.trim()} onClick={addDocument} className="h-11 rounded-lg bg-primary px-5 text-xs font-bold text-primary-foreground disabled:opacity-50" data-testid="button-save-document">{create.isPending ? 'Adding…' : 'Add document'}</button></div></div>}
+         {showAdd && <div className="animate-rise-in rounded-2xl border border-accent/45 bg-accent/10 p-5 sm:p-6"><div className="flex items-start justify-between"><div><p className="font-semibold">Add and read a client document</p><p className="mt-1 text-xs text-muted-foreground">Upload a Form 16 or supported tax document. Mistral OCR will read it on the server, then you review every extracted value.</p></div><button onClick={() => setShowAdd(false)} aria-label="Close add document" data-testid="button-close-add-document"><X size={18} /></button></div><div className="mt-5 grid gap-4 md:grid-cols-2"><label className="block"><span className="mb-2 block font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">Tax document</span><input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setSelectedFile(file); setOcrError(''); if (file) setFileName(file.name); }} className="block h-11 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs" data-testid="input-document-file" /><input value={fileName} onChange={(event) => setFileName(event.target.value)} placeholder="Or enter a file name" className="mt-2 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none ring-accent focus:ring-2" data-testid="input-document-file-name" />{selectedFile && <p className="mt-1 text-[11px] text-muted-foreground">{Math.ceil(selectedFile.size / 1024)} KB selected · sent securely to the server for OCR</p>}</label><label className="block"><span className="mb-2 block font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">Document type</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="h-11 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none" data-testid="select-document-type">{Object.values(DocumentDocumentType).map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}</select><p className="mt-2 text-[11px] text-muted-foreground">OCR reads the file on the API server with your Mistral connection. It never exposes the API key to the browser.</p></label></div><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">Employer</span><input value={employer} onChange={(event) => setEmployer(event.target.value)} placeholder="Optional override" className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-employer" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">Gross salary</span><input type="number" value={grossSalary} onChange={(event) => setGrossSalary(event.target.value)} placeholder="OCR override" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-gross-salary" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">TDS deducted</span><input type="number" value={tdsDeducted} onChange={(event) => setTdsDeducted(event.target.value)} placeholder="OCR override" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-tds" /></label><label className="block"><span className="mb-2 block text-xs font-medium text-muted-foreground">PAN</span><input value={pan} onChange={(event) => setPan(event.target.value.toUpperCase())} maxLength={10} placeholder="OCR override" className="h-10 w-full rounded-lg border border-border bg-card px-3 font-mono-ui text-sm uppercase outline-none focus:ring-2 focus:ring-accent" data-testid="input-document-pan" /></label></div>{ocrError && <p className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">{ocrError}</p>}{consentQuery.data && !consentQuery.data.ocrProcessing && <p className="mt-4 text-[11px] text-muted-foreground">Enable “Document reading” in Privacy settings before uploading a file for OCR.</p>}<div className="mt-5 flex justify-end"><button disabled={create.isPending || !fileName.trim()} onClick={addDocument} className="h-11 rounded-lg bg-primary px-5 text-xs font-bold text-primary-foreground disabled:opacity-50" data-testid="button-save-document">{create.isPending ? (selectedFile ? 'Reading with Mistral…' : 'Adding…') : selectedFile ? 'Upload and read document' : 'Add document'}</button></div></div>}
         <div className="grid gap-4 sm:grid-cols-3"><StatTile label="In workspace" value={String(docs.length)} icon={<FileText size={17} />} /><StatTile label="Need review" value={String(docs.filter((doc) => doc.status === 'review').length)} icon={<PencilLine size={17} />} tone="amber" /><StatTile label="Verified" value={String(docs.filter((doc) => doc.status === 'verified').length)} icon={<BadgeCheck size={17} />} tone="green" /></div>
         <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">{['all', 'review', 'verified', 'processing'].map((item) => <button key={item} onClick={() => setFilter(item)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${filter === item ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`} data-testid={`button-filter-${item}`}>{item === 'all' ? 'All documents' : titleCase(item)}</button>)}</div>
         {docsQuery.isLoading ? <LoadingBlock label="Loading your documents" /> : docsQuery.isError ? <QueryError onRetry={() => docsQuery.refetch()} /> : filtered.length === 0 ? <EmptyDocuments onAdd={() => setShowAdd(true)} /> : <div className="overflow-hidden rounded-2xl border border-border bg-card"><div className="hidden grid-cols-[1.5fr_1fr_.8fr_.7fr_44px] gap-4 border-b border-border bg-muted/45 px-5 py-3 font-mono-ui text-[9px] uppercase tracking-[.13em] text-muted-foreground md:grid"><span>Document</span><span>Extracted employer</span><span>Confidence</span><span>Status</span><span /></div>{filtered.map((doc) => <DocumentRow key={doc.id} doc={doc} onStatus={() => changeStatus(doc)} onDelete={() => deleteDocument(doc)} pending={update.isPending || remove.isPending} />)}</div>}
       </div>
     </Shell>
+  );
+}
+
+type PracticeClient = {
+  id: string;
+  name: string;
+  panMasked: string;
+  email: string;
+  service: string;
+  status: string;
+  nextDeadline: string;
+};
+
+type PracticeTask = {
+  id: string;
+  clientId?: string | null;
+  clientName?: string | null;
+  title: string;
+  category: string;
+  dueDate: string;
+  priority: string;
+  assignee: string;
+  status: string;
+};
+
+function usePracticeData() {
+  const [clients, setClients] = useState<PracticeClient[]>([]);
+  const [tasks, setTasks] = useState<PracticeTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const [clientsResponse, tasksResponse] = await Promise.all([
+        fetch('/api/practice/clients'),
+        fetch('/api/practice/tasks'),
+      ]);
+      if (!clientsResponse.ok || !tasksResponse.ok) throw new Error('Practice data could not be loaded.');
+      setClients(await clientsResponse.json());
+      setTasks(await tasksResponse.json());
+      setError('');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Practice data could not be loaded.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void refresh();
+  }, []);
+  return { clients, tasks, loading, error, refresh };
+}
+
+function PracticeWorkflow() {
+  const { clients, tasks, loading, error, refresh } = usePracticeData();
+  const [clientName, setClientName] = useState('');
+  const [clientService, setClientService] = useState('ITR filing');
+  const [clientDeadline, setClientDeadline] = useState('');
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskCategory, setTaskCategory] = useState('document_collection');
+  const [taskDate, setTaskDate] = useState('');
+  const [taskClient, setTaskClient] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const addClient = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!clientName.trim()) return;
+    setSaving(true);
+    setFormError('');
+    try {
+      const response = await fetch('/api/practice/clients', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: clientName.trim(), service: clientService, nextDeadline: clientDeadline }),
+      });
+      if (!response.ok) throw new Error('Client could not be added.');
+      setClientName('');
+      setClientDeadline('');
+      await refresh();
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : 'Client could not be added.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addTask = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!taskTitle.trim() || !taskDate) return;
+    setSaving(true);
+    setFormError('');
+    try {
+      const response = await fetch('/api/practice/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: taskTitle.trim(),
+          category: taskCategory,
+          dueDate: taskDate,
+          clientId: taskClient || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error('Task could not be created.');
+      setTaskTitle('');
+      setTaskDate('');
+      await refresh();
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : 'Task could not be created.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const completeTask = async (task: PracticeTask) => {
+    await fetch(`/api/practice/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: task.status === 'done' ? 'open' : 'done' }),
+    });
+    await refresh();
+  };
+
+  return (
+    <section className="space-y-5">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">Practice operations</p>
+          <h2 className="mt-2 font-display text-[29px]">Clients, deadlines, and approvals</h2>
+        </div>
+        <span className="hidden rounded-full bg-[#dcebe4] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-[#27766e] sm:block">Persisted workspace</span>
+      </div>
+      {error && <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-xs text-destructive">{error} <button onClick={() => void refresh()} className="ml-2 font-bold underline">Retry</button></div>}
+      <div className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <div className="flex items-center justify-between"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">Client register</p><h3 className="mt-2 font-display text-[25px]">{clients.length} client{clients.length === 1 ? '' : 's'}</h3></div><BadgeCheck className="text-[#27766e]" size={20} /></div>
+          <form onSubmit={addClient} className="mt-5 space-y-3 border-b border-border pb-5">
+            <input value={clientName} onChange={(event) => setClientName(event.target.value)} placeholder="Client or family name" className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-practice-client-name" />
+            <div className="grid grid-cols-2 gap-3"><select value={clientService} onChange={(event) => setClientService(event.target.value)} className="h-10 rounded-lg border border-border bg-background px-3 text-xs outline-none" data-testid="select-practice-client-service"><option>ITR filing</option><option>GST compliance</option><option>TDS return</option><option>Bookkeeping</option><option>ROC compliance</option></select><input type="date" value={clientDeadline} onChange={(event) => setClientDeadline(event.target.value)} className="h-10 rounded-lg border border-border bg-background px-3 text-xs outline-none" data-testid="input-practice-client-deadline" /></div>
+            <button type="submit" disabled={saving || !clientName.trim()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground disabled:opacity-50" data-testid="button-add-practice-client"><Plus size={14} /> Add client</button>
+          </form>
+          <div className="mt-4 space-y-2">{loading ? <p className="text-xs text-muted-foreground">Loading clients…</p> : clients.length === 0 ? <p className="rounded-lg bg-muted/50 px-3 py-4 text-xs leading-5 text-muted-foreground">Add your first client to start assigning document requests and filing work.</p> : clients.slice(0, 5).map((client) => <div key={client.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-3"><div><p className="text-xs font-semibold">{client.name}</p><p className="mt-1 text-[11px] text-muted-foreground">{client.service} · {client.nextDeadline ? `Due ${dateLabel(client.nextDeadline)}` : 'No deadline set'}</p></div><span className="rounded-full bg-muted px-2 py-1 text-[10px] font-semibold">{client.panMasked}</span></div>)}</div>
+        </section>
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <div className="flex items-center justify-between"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">Compliance queue</p><h3 className="mt-2 font-display text-[25px]">{tasks.filter((task) => task.status !== 'done').length} open task{tasks.filter((task) => task.status !== 'done').length === 1 ? '' : 's'}</h3></div><ClipboardCheck className="text-[#27766e]" size={20} /></div>
+          <form onSubmit={addTask} className="mt-5 space-y-3 border-b border-border pb-5">
+            <input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="e.g. Request bank statement" className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-accent" data-testid="input-practice-task-title" />
+            <div className="grid grid-cols-[1fr_150px] gap-3"><select value={taskCategory} onChange={(event) => setTaskCategory(event.target.value)} className="h-10 rounded-lg border border-border bg-background px-3 text-xs outline-none" data-testid="select-practice-task-category"><option value="document_collection">Document collection</option><option value="gst_filing">GST filing</option><option value="tds_return">TDS return</option><option value="itr_filing">ITR filing</option><option value="review_approval">Review & approval</option><option value="billing">Billing</option></select><input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} className="h-10 rounded-lg border border-border bg-background px-3 text-xs outline-none" data-testid="input-practice-task-date" /></div>
+            <div className="flex gap-3"><select value={taskClient} onChange={(event) => setTaskClient(event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-xs outline-none" data-testid="select-practice-task-client"><option value="">No client linked</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select><button type="submit" disabled={saving || !taskTitle.trim() || !taskDate} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground disabled:opacity-50" data-testid="button-add-practice-task"><Plus size={14} /> Add task</button></div>
+          </form>
+          {formError && <p className="mt-3 text-xs text-destructive">{formError}</p>}
+          <div className="mt-4 space-y-2">{loading ? <p className="text-xs text-muted-foreground">Loading tasks…</p> : tasks.length === 0 ? <p className="rounded-lg bg-muted/50 px-3 py-4 text-xs leading-5 text-muted-foreground">Create recurring GST, TDS, ITR, review, and document tasks here. The queue stays visible until your team closes each item.</p> : tasks.slice(0, 6).map((task) => <div key={task.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-3"><button onClick={() => void completeTask(task)} className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${task.status === 'done' ? 'border-[#2b837a] bg-[#2b837a] text-white' : 'border-border text-transparent hover:border-[#2b837a]'}`} aria-label={task.status === 'done' ? 'Reopen task' : 'Complete task'} data-testid={`button-complete-practice-task-${task.id}`}><Check size={13} /></button><div className="min-w-0 flex-1"><p className={`truncate text-xs font-semibold ${task.status === 'done' ? 'text-muted-foreground line-through' : ''}`}>{task.title}</p><p className="mt-1 text-[11px] text-muted-foreground">{task.clientName || 'No client'} · {titleCase(task.category)} · Due {dateLabel(task.dueDate)}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[.08em] ${task.priority === 'urgent' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>{task.status === 'done' ? 'Done' : task.priority}</span></div>)}</div>
+        </section>
+      </div>
+    </section>
   );
 }
 

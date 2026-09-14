@@ -1,0 +1,1 @@
+- [Mistral OCR request shape](mistral-ocr.md) — PDFs use a data URL in the provider's document_url chunk shape.
